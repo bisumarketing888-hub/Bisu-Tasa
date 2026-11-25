@@ -1,0 +1,31 @@
+<resources>
+    <string name="app_name">Tasa Bisu</string>
+    <string name="nav_home">Cotizar</string>
+    <string name="nav_history">Historial</string>
+    <string name="nav_schedule">Programar</string>
+    <string name="action_refresh">Actualizar tasas</string>
+    <string name="action_save_gallery">Guardar en galería</string>
+    <string name="action_copy">Copiar</string>
+    <string name="action_edit">Editar</string>
+    <string name="action_send_step1">Enviar Foto + BCV</string>
+    <string name="action_send_step2">Enviar Diferencial</string>
+    <string name="label_bcv_official">Tasa BCV</string>
+    <string name="label_binance_p2p">Binance P2P · Banesco</string>
+    <string name="label_differential">Diferencial Calculado</string>
+    <string name="label_dispatch_title">Envío Express a WhatsApp Business</string>
+    <string name="label_target_group">Grupo destino</string>
+    <string name="status_schedule_active">Auto 8:50–8:59 AM</string>
+    <string name="status_schedule_paused">Manual</string>
+    <string name="notification_channel_name">Cotización Diaria BCV</string>
+    <string name="notification_channel_desc">Prepara automáticamente la tasa BCV, Binance P2P y el diferencial antes de las 9:00 AM.</string>
+    <string name="cd_quote_card">Vista previa de la imagen de cotización BCV</string>
+    <string name="cd_refresh_rates">Actualizar tasas desde BCV y Binance P2P</string>
+    <string name="cd_save_image">Guardar imagen en galería</string>
+    <string name="cd_copy_caption">Copiar texto de cotización BCV</string>
+    <string name="cd_copy_diff">Copiar texto de diferencial</string>
+    <string name="cd_edit_rates">Editar tasas manualmente</string>
+    <string name="cd_select_offer">Ver anuncios de Binance P2P</string>
+    <string name="cd_whatsapp_icon">WhatsApp Business</string>
+    <string name="accessibility_service_label">Tasa Bisu · Auto-Envío WhatsApp</string>
+    <string name="accessibility_service_description">Permite a Tasa Bisu buscar automáticamente tu grupo configurado en WhatsApp Business y enviar la imagen de cotización BCV y el mensaje del diferencial cada mañana sin intervención manual.</string>
+</resources>

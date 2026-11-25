@@ -1,0 +1,6 @@
+{
+  "name": "Tasa Bisu",
+  "description": "Obtiene automáticamente la tasa diaria del BCV y Binance P2P (Banesco), calcula el diferencial porcentual, genera la imagen de cotización y prepara el envío diario a WhatsApp Business.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
