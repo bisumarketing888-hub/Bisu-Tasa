@@ -44,6 +44,7 @@ import androidx.compose.material.icons.rounded.Image
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material.icons.rounded.Storefront
+import androidx.compose.material.icons.rounded.SystemUpdate
 import androidx.compose.material.icons.rounded.WarningAmber
 import androidx.compose.material.icons.rounded.ZoomIn
 import androidx.compose.material3.AlertDialog
@@ -87,6 +88,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.R
+import com.example.data.network.GitHubReleaseInfo
 import com.example.domain.BinanceOffer
 import com.example.domain.RateCalculator
 import com.example.scheduler.DailyScheduleManager
@@ -116,6 +118,8 @@ fun HomeScreen(
     onApplyManualRates: (String, String, String) -> Unit,
     onOpenBcvWeb: () -> Unit,
     onOpenBinanceWeb: () -> Unit,
+    onOpenGitHubUpdate: (String) -> Unit,
+    onDismissGitHubUpdate: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var showEditDialog by remember { mutableStateOf(false) }
@@ -139,6 +143,17 @@ fun HomeScreen(
                     onRefresh = onRefresh,
                     onOpenEdit = { showEditDialog = true },
                 )
+            }
+
+            // GitHub Update Available Banner
+            uiState.availableUpdate?.let { release ->
+                item {
+                    UpdateAvailableBannerCard(
+                        release = release,
+                        onOpenRelease = { onOpenGitHubUpdate(release.htmlUrl) },
+                        onDismiss = { onDismissGitHubUpdate(release.tagName) },
+                    )
+                }
             }
 
             // Live error strip if network fetch had issues
@@ -385,6 +400,90 @@ private fun TopBrandHeader(
                         contentDescription = stringResource(R.string.cd_refresh_rates),
                         tint = MaterialTheme.colorScheme.primary,
                     )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun UpdateAvailableBannerCard(
+    release: GitHubReleaseInfo,
+    onOpenRelease: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val summaryLine = remember(release.releaseNotes) {
+        release.releaseNotes
+            .lineSequence()
+            .map { it.trim().trimStart('#', '*', '-', ' ') }
+            .firstOrNull { it.isNotBlank() }
+            ?: "Nueva versión compilada en GitHub lista para descargar e instalar."
+    }
+
+    Card(
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.85f),
+        ),
+        border = BorderStroke(1.2.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.65f)),
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("github_update_banner_card"),
+    ) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.SystemUpdate,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(22.dp),
+                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Actualización disponible · ${release.tagName}",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    )
+                    Text(
+                        text = summaryLine,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.85f),
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Button(
+                    onClick = onOpenRelease,
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier
+                        .weight(1f)
+                        .testTag("open_github_update_button"),
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Rounded.OpenInNew,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Abrir en GitHub")
+                }
+                TextButton(
+                    onClick = onDismiss,
+                    modifier = Modifier.testTag("dismiss_github_update_button"),
+                ) {
+                    Text("Ocultar")
                 }
             }
         }

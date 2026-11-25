@@ -23,10 +23,12 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.AccessibilityNew
 import androidx.compose.material.icons.rounded.Alarm
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.CloudSync
 import androidx.compose.material.icons.rounded.DarkMode
 import androidx.compose.material.icons.rounded.Groups
 import androidx.compose.material.icons.rounded.Image
@@ -34,10 +36,12 @@ import androidx.compose.material.icons.rounded.LockOpen
 import androidx.compose.material.icons.rounded.NotificationsActive
 import androidx.compose.material.icons.rounded.RadioButtonUnchecked
 import androidx.compose.material.icons.rounded.Restore
+import androidx.compose.material.icons.rounded.SystemUpdate
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -60,6 +64,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import com.example.BuildConfig
+import com.example.data.network.GitHubReleaseInfo
 import com.example.domain.AutomationReadiness
 import com.example.domain.DispatchSettings
 import com.example.domain.PreferredWhatsAppApp
@@ -99,12 +105,22 @@ fun ScheduleSettingsScreen(
     onRequestBatteryUnrestricted: () -> Unit,
     onTestAutoSendNow: () -> Unit,
     onTestNotification: () -> Unit,
+    availableUpdate: GitHubReleaseInfo?,
+    isCheckingUpdate: Boolean,
+    updateStatusText: String?,
+    onUpdateGitHubRepo: (String) -> Unit,
+    onToggleAutoCheckUpdates: (Boolean) -> Unit,
+    onCheckGitHubUpdatesNow: () -> Unit,
+    onOpenGitHubUpdate: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
     var groupInput by remember(settings.targetGroupName) { mutableStateOf(settings.targetGroupName) }
     var captionTimeInput by remember(settings.displayTimeLabel) {
         mutableStateOf(settings.displayTimeLabel)
+    }
+    var githubRepoInput by remember(settings.githubRepoSlug) {
+        mutableStateOf(settings.githubRepoSlug)
     }
 
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
@@ -512,7 +528,111 @@ fun ScheduleSettingsScreen(
                 }
             }
 
-            // 5. Theme toggle
+            // 5. GitHub Releases Updates
+            item {
+                SettingsSectionCard(
+                    title = "Actualizaciones desde GitHub",
+                    subtitle = "Versión instalada: v${BuildConfig.VERSION_NAME} · Avisa automáticamente al subir cambios.",
+                    icon = Icons.Rounded.CloudSync,
+                ) {
+                    OutlinedTextField(
+                        value = githubRepoInput,
+                        onValueChange = {
+                            githubRepoInput = it
+                            onUpdateGitHubRepo(it)
+                        },
+                        label = { Text("Repositorio GitHub (usuario/repositorio o URL)") },
+                        placeholder = { Text("Ej. miusuario/tasa-bisu") },
+                        supportingText = {
+                            Text("Al compilar desde GitHub Actions se completa solo. El repositorio debe ser público para leer Releases sin token.")
+                        },
+                        singleLine = true,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("github_repo_input"),
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Notificar actualizaciones automáticamente",
+                                style = MaterialTheme.typography.titleSmall,
+                                color = MaterialTheme.colorScheme.onSurface,
+                            )
+                            Text(
+                                text = "Revisa GitHub por Wi-Fi y muestra notificación cuando haya una nueva APK",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        Switch(
+                            checked = settings.autoCheckUpdates,
+                            onCheckedChange = onToggleAutoCheckUpdates,
+                            modifier = Modifier.testTag("auto_check_updates_switch"),
+                        )
+                    }
+
+                    OutlinedButton(
+                        onClick = onCheckGitHubUpdatesNow,
+                        enabled = !isCheckingUpdate,
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp)
+                            .testTag("check_github_updates_button"),
+                    ) {
+                        if (isCheckingUpdate) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(18.dp),
+                                strokeWidth = 2.dp,
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Buscando en GitHub...")
+                        } else {
+                            Icon(
+                                imageVector = Icons.Rounded.SystemUpdate,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp),
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Buscar actualización ahora")
+                        }
+                    }
+
+                    if (availableUpdate != null) {
+                        Button(
+                            onClick = { onOpenGitHubUpdate(availableUpdate.htmlUrl) },
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(48.dp)
+                                .testTag("settings_open_github_release_button"),
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Rounded.OpenInNew,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp),
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Descargar ${availableUpdate.tagName} en GitHub")
+                        }
+                    }
+
+                    if (!updateStatusText.isNullOrBlank()) {
+                        Text(
+                            text = updateStatusText,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                }
+            }
+
+            // 6. Theme toggle
             item {
                 SettingsSectionCard(
                     title = "Apariencia",

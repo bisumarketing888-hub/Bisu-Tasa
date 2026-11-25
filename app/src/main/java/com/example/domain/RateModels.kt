@@ -53,6 +53,9 @@ data class DispatchSettings(
     val displayTimeLabel: String = "9:00 am",
     val customTemplateUri: String = "",
     val darkThemeEnabled: Boolean = true,
+    val githubRepoSlug: String = "",
+    val autoCheckUpdates: Boolean = true,
+    val acknowledgedReleaseTag: String = "",
 )
 
 data class AutomationReadiness(

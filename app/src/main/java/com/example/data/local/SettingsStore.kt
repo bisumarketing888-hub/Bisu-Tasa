@@ -10,6 +10,7 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.example.BuildConfig
 import com.example.domain.CachedQuoteData
 import com.example.domain.DispatchSettings
 import com.example.domain.PreferredWhatsAppApp
@@ -38,6 +39,10 @@ class SettingsStore(private val context: Context) {
         val DISPLAY_TIME_LABEL = stringPreferencesKey("display_time_label")
         val CUSTOM_TEMPLATE_URI = stringPreferencesKey("custom_template_uri")
         val DARK_THEME = booleanPreferencesKey("dark_theme_enabled")
+        val GITHUB_REPO_SLUG = stringPreferencesKey("github_repo_slug")
+        val AUTO_CHECK_UPDATES = booleanPreferencesKey("auto_check_updates")
+        val ACKNOWLEDGED_RELEASE_TAG = stringPreferencesKey("acknowledged_release_tag")
+        val LAST_NOTIFIED_RELEASE_TAG = stringPreferencesKey("last_notified_release_tag")
 
         // Cached last fetched rates
         val CACHED_BCV_RATE = doublePreferencesKey("cached_bcv_rate")
@@ -72,6 +77,10 @@ class SettingsStore(private val context: Context) {
             displayTimeLabel = prefs[Keys.DISPLAY_TIME_LABEL] ?: "9:00 am",
             customTemplateUri = prefs[Keys.CUSTOM_TEMPLATE_URI] ?: "",
             darkThemeEnabled = prefs[Keys.DARK_THEME] ?: true,
+            githubRepoSlug = prefs[Keys.GITHUB_REPO_SLUG]?.ifBlank { BuildConfig.DEFAULT_GITHUB_REPO }
+                ?: BuildConfig.DEFAULT_GITHUB_REPO,
+            autoCheckUpdates = prefs[Keys.AUTO_CHECK_UPDATES] ?: true,
+            acknowledgedReleaseTag = prefs[Keys.ACKNOWLEDGED_RELEASE_TAG] ?: "",
         )
     }
 
@@ -179,5 +188,25 @@ class SettingsStore(private val context: Context) {
 
     suspend fun markDiffSentForDate(dateKey: String) {
         context.tasaBisuDataStore.edit { it[Keys.DIFF_SENT_DATE_KEY] = dateKey }
+    }
+
+    suspend fun updateGitHubRepoSlug(slug: String) {
+        context.tasaBisuDataStore.edit { it[Keys.GITHUB_REPO_SLUG] = slug.trim() }
+    }
+
+    suspend fun updateAutoCheckUpdates(enabled: Boolean) {
+        context.tasaBisuDataStore.edit { it[Keys.AUTO_CHECK_UPDATES] = enabled }
+    }
+
+    suspend fun acknowledgeReleaseTag(tag: String) {
+        context.tasaBisuDataStore.edit { it[Keys.ACKNOWLEDGED_RELEASE_TAG] = tag.trim() }
+    }
+
+    suspend fun getLastNotifiedReleaseTag(): String {
+        return context.tasaBisuDataStore.data.first()[Keys.LAST_NOTIFIED_RELEASE_TAG] ?: ""
+    }
+
+    suspend fun markReleaseNotified(tag: String) {
+        context.tasaBisuDataStore.edit { it[Keys.LAST_NOTIFIED_RELEASE_TAG] = tag.trim() }
     }
 }

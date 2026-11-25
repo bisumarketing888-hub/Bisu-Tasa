@@ -219,6 +219,8 @@ private fun TasaBisuAppRoot(viewModel: TasaBisuViewModel) {
                         },
                         onOpenBcvWeb = { viewModel.openBcvWebsite() },
                         onOpenBinanceWeb = { viewModel.openBinanceWebsite() },
+                        onOpenGitHubUpdate = { viewModel.openAvailableUpdateInBrowser(it) },
+                        onDismissGitHubUpdate = { viewModel.dismissAvailableUpdate(it) },
                         modifier = Modifier.weight(1f),
                     )
 
@@ -246,6 +248,13 @@ private fun TasaBisuAppRoot(viewModel: TasaBisuViewModel) {
                         onRequestBatteryUnrestricted = { viewModel.requestIgnoreBatteryOptimizations() },
                         onTestAutoSendNow = { viewModel.startFullAutoSendNow() },
                         onTestNotification = { viewModel.sendTestMorningNotification() },
+                        availableUpdate = uiState.availableUpdate,
+                        isCheckingUpdate = uiState.isCheckingUpdate,
+                        updateStatusText = uiState.updateStatusText,
+                        onUpdateGitHubRepo = { viewModel.updateGitHubRepoSlug(it) },
+                        onToggleAutoCheckUpdates = { viewModel.updateAutoCheckUpdates(it) },
+                        onCheckGitHubUpdatesNow = { viewModel.checkForGitHubUpdates(manual = true) },
+                        onOpenGitHubUpdate = { viewModel.openAvailableUpdateInBrowser(it) },
                         modifier = Modifier.weight(1f),
                     )
                 }

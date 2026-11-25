@@ -5,6 +5,7 @@ import androidx.core.app.NotificationCompat
 import androidx.work.CoroutineWorker
 import androidx.work.ForegroundInfo
 import androidx.work.WorkerParameters
+import com.example.BuildConfig
 import com.example.R
 import com.example.automation.AutoSendOrchestrator
 import com.example.automation.WhatsAppAutoSendService
@@ -12,6 +13,7 @@ import com.example.data.local.AppDatabase
 import com.example.data.local.RateHistoryEntity
 import com.example.data.local.SettingsStore
 import com.example.data.media.QuoteCardGenerator
+import com.example.data.network.GitHubUpdateChecker
 import com.example.data.network.RateScraperService
 import com.example.domain.RateCalculator
 import kotlinx.coroutines.Dispatchers
@@ -147,6 +149,33 @@ class DailyQuoteWorker(
                 differentialPercent = diff.percent,
                 targetGroupName = settings.targetGroupName,
             )
+        }
+
+        // Also check GitHub Releases for app updates in the background if configured
+        val repoSlug = settings.githubRepoSlug.ifBlank { BuildConfig.DEFAULT_GITHUB_REPO }
+        if (settings.autoCheckUpdates && repoSlug.isNotBlank()) {
+            runCatching {
+                val release = GitHubUpdateChecker().fetchLatestRelease(repoSlug).getOrNull()
+                if (release != null && GitHubUpdateChecker.isNewerVersion(
+                        latestTag = release.tagName,
+                        installedVersion = BuildConfig.VERSION_NAME,
+                        acknowledgedTag = settings.acknowledgedReleaseTag,
+                    )
+                ) {
+                    val lastNotified = settingsStore.getLastNotifiedReleaseTag()
+                    if (!lastNotified.equals(release.tagName, ignoreCase = true)) {
+                        val posted = DailyScheduleManager.postUpdateAvailableNotification(
+                            context = applicationContext,
+                            releaseTag = release.tagName,
+                            releaseNotes = release.releaseNotes,
+                            releaseHtmlUrl = release.htmlUrl,
+                        )
+                        if (posted) {
+                            settingsStore.markReleaseNotified(release.tagName)
+                        }
+                    }
+                }
+            }
         }
 
         Result.success()

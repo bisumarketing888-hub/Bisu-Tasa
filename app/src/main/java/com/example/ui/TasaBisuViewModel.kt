@@ -8,6 +8,7 @@ import android.os.Build
 import android.provider.Settings
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.BuildConfig
 import com.example.automation.AutoSendOrchestrator
 import com.example.automation.AutoSendStatus
 import com.example.automation.WhatsAppAutoSendService
@@ -15,6 +16,8 @@ import com.example.data.local.AppDatabase
 import com.example.data.local.RateHistoryEntity
 import com.example.data.local.SettingsStore
 import com.example.data.media.QuoteCardGenerator
+import com.example.data.network.GitHubReleaseInfo
+import com.example.data.network.GitHubUpdateChecker
 import com.example.data.network.RateScraperService
 import com.example.domain.AutomationReadiness
 import com.example.domain.BinanceOffer
@@ -23,6 +26,7 @@ import com.example.domain.DispatchSettings
 import com.example.domain.PreferredWhatsAppApp
 import com.example.domain.RateCalculator
 import com.example.scheduler.DailyScheduleManager
+import com.example.scheduler.GitHubUpdateCheckWorker
 import com.example.whatsapp.DispatchOutcome
 import com.example.whatsapp.WhatsAppAvailability
 import com.example.whatsapp.WhatsAppDispatcher
@@ -58,6 +62,9 @@ data class TasaBisuUiState(
     val autoSendStatus: AutoSendStatus = AutoSendStatus(),
     val history: List<RateHistoryEntity> = emptyList(),
     val statusBannerMessage: String? = null,
+    val availableUpdate: GitHubReleaseInfo? = null,
+    val isCheckingUpdate: Boolean = false,
+    val updateStatusText: String? = null,
 ) {
     val activeBinanceRate: Double
         get() = binanceManualRate
@@ -97,6 +104,7 @@ class TasaBisuViewModel(application: Application) : AndroidViewModel(application
 
     private val appContext = application.applicationContext
     private val scraper = RateScraperService()
+    private val updateChecker = GitHubUpdateChecker()
     private val settingsStore = SettingsStore(appContext)
     private val historyDao = AppDatabase.getInstance(appContext).rateHistoryDao()
 
@@ -108,6 +116,7 @@ class TasaBisuViewModel(application: Application) : AndroidViewModel(application
     val uiState: StateFlow<TasaBisuUiState> = _uiState.asStateFlow()
 
     private var pendingQuickAction: String? = null
+    private var initialUpdateCheckTriggered = false
 
     init {
         DailyScheduleManager.ensureNotificationChannel(appContext)
@@ -202,6 +211,19 @@ class TasaBisuViewModel(application: Application) : AndroidViewModel(application
 
                 if (templateChanged || (current.cardBitmap == null && effectiveBcv > 0.0)) {
                     regenerateCard()
+                }
+
+                if (!initialUpdateCheckTriggered) {
+                    initialUpdateCheckTriggered = true
+                    val repo = settings.githubRepoSlug.ifBlank { BuildConfig.DEFAULT_GITHUB_REPO }
+                    GitHubUpdateCheckWorker.syncPeriodicSchedule(
+                        context = appContext,
+                        enabled = settings.autoCheckUpdates,
+                        repoSlug = repo,
+                    )
+                    if (settings.autoCheckUpdates && repo.isNotBlank()) {
+                        checkForGitHubUpdates(manual = false)
+                    }
                 }
             }
         }
@@ -711,6 +733,132 @@ class TasaBisuViewModel(application: Application) : AndroidViewModel(application
             showBanner("Notificación de prueba enviada. Revisa tu barra de notificaciones.")
         } else {
             showBanner("Concede el permiso de notificaciones para recibir el aviso de las 8:50–8:59 AM.")
+        }
+    }
+
+    fun updateGitHubRepoSlug(slug: String) {
+        viewModelScope.launch {
+            val trimmed = slug.trim()
+            settingsStore.updateGitHubRepoSlug(trimmed)
+            val normalized = GitHubUpdateChecker.normalizeRepoSlug(trimmed).orEmpty()
+            GitHubUpdateCheckWorker.syncPeriodicSchedule(
+                context = appContext,
+                enabled = _uiState.value.settings.autoCheckUpdates,
+                repoSlug = normalized.ifBlank { BuildConfig.DEFAULT_GITHUB_REPO },
+            )
+        }
+    }
+
+    fun updateAutoCheckUpdates(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsStore.updateAutoCheckUpdates(enabled)
+            val repo = _uiState.value.settings.githubRepoSlug.ifBlank { BuildConfig.DEFAULT_GITHUB_REPO }
+            GitHubUpdateCheckWorker.syncPeriodicSchedule(
+                context = appContext,
+                enabled = enabled,
+                repoSlug = repo,
+            )
+            showBanner(
+                if (enabled) {
+                    "Aviso automático de actualizaciones de GitHub activado"
+                } else {
+                    "Revisión automática de actualizaciones pausada"
+                },
+            )
+        }
+    }
+
+    fun checkForGitHubUpdates(manual: Boolean = true) {
+        if (_uiState.value.isCheckingUpdate) return
+        val settings = _uiState.value.settings
+        val rawRepo = settings.githubRepoSlug.ifBlank { BuildConfig.DEFAULT_GITHUB_REPO }
+
+        if (rawRepo.isBlank()) {
+            if (manual) {
+                showBanner("Escribe tu repositorio de GitHub (ej. usuario/tasa-bisu) para buscar actualizaciones.")
+            }
+            return
+        }
+        if (!RateScraperService.isNetworkConnected(appContext)) {
+            if (manual) {
+                showBanner("Sin conexión Wi-Fi/internet para consultar GitHub.")
+            }
+            return
+        }
+
+        viewModelScope.launch {
+            _uiState.update {
+                it.copy(
+                    isCheckingUpdate = true,
+                    updateStatusText = if (manual) "Consultando GitHub Releases..." else it.updateStatusText,
+                )
+            }
+
+            val result = updateChecker.fetchLatestRelease(rawRepo)
+            result.onSuccess { release ->
+                val isNewer = GitHubUpdateChecker.isNewerVersion(
+                    latestTag = release.tagName,
+                    installedVersion = BuildConfig.VERSION_NAME,
+                    acknowledgedTag = if (manual) "" else settings.acknowledgedReleaseTag,
+                )
+                if (isNewer) {
+                    _uiState.update {
+                        it.copy(
+                            isCheckingUpdate = false,
+                            availableUpdate = release,
+                            updateStatusText = "Nueva versión disponible: ${release.tagName} (instalada: v${BuildConfig.VERSION_NAME})",
+                        )
+                    }
+                    val lastNotified = settingsStore.getLastNotifiedReleaseTag()
+                    if (manual || !lastNotified.equals(release.tagName, ignoreCase = true)) {
+                        val posted = DailyScheduleManager.postUpdateAvailableNotification(
+                            context = appContext,
+                            releaseTag = release.tagName,
+                            releaseNotes = release.releaseNotes,
+                            releaseHtmlUrl = release.htmlUrl,
+                        )
+                        if (posted) {
+                            settingsStore.markReleaseNotified(release.tagName)
+                        }
+                    }
+                    if (manual) {
+                        showBanner("¡Actualización ${release.tagName} disponible en GitHub!")
+                    }
+                } else {
+                    _uiState.update {
+                        it.copy(
+                            isCheckingUpdate = false,
+                            availableUpdate = null,
+                            updateStatusText = "Al día · Versión instalada v${BuildConfig.VERSION_NAME} (última en GitHub: ${release.tagName})",
+                        )
+                    }
+                    if (manual) {
+                        showBanner("Tasa Bisu ya está en la última versión (${release.tagName}).")
+                    }
+                }
+            }.onFailure { err ->
+                val message = err.localizedMessage ?: "No se pudo consultar GitHub Releases."
+                _uiState.update {
+                    it.copy(
+                        isCheckingUpdate = false,
+                        updateStatusText = if (manual) message else it.updateStatusText,
+                    )
+                }
+                if (manual) {
+                    showBanner(message)
+                }
+            }
+        }
+    }
+
+    fun openAvailableUpdateInBrowser(url: String) {
+        WhatsAppDispatcher.openExternalUrl(appContext, url)
+    }
+
+    fun dismissAvailableUpdate(tag: String) {
+        viewModelScope.launch {
+            settingsStore.acknowledgeReleaseTag(tag)
+            _uiState.update { it.copy(availableUpdate = null) }
         }
     }
 

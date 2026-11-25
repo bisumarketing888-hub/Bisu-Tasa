@@ -18,6 +18,8 @@
     <string name="status_schedule_paused">Manual</string>
     <string name="notification_channel_name">Cotización Diaria BCV</string>
     <string name="notification_channel_desc">Prepara automáticamente la tasa BCV, Binance P2P y el diferencial antes de las 9:00 AM.</string>
+    <string name="update_channel_name">Actualizaciones desde GitHub</string>
+    <string name="update_channel_desc">Avisa cuando hay una nueva compilación de Tasa Bisu disponible en GitHub Releases.</string>
     <string name="cd_quote_card">Vista previa de la imagen de cotización BCV</string>
     <string name="cd_refresh_rates">Actualizar tasas desde BCV y Binance P2P</string>
     <string name="cd_save_image">Guardar imagen en galería</string>

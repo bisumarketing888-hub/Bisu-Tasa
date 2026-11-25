@@ -8,6 +8,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.PowerManager
 import androidx.core.app.NotificationCompat
@@ -28,9 +29,11 @@ object DailyScheduleManager {
     const val QUICK_ACTION_SEND_DIFF = "quick_send_diff"
 
     const val NOTIFICATION_CHANNEL_ID = "daily_bcv_quote_channel"
+    const val UPDATE_NOTIFICATION_CHANNEL_ID = "tasa_bisu_updates_channel"
     private const val ALARM_REQUEST_CODE = 8881
     private const val NOTIFICATION_ID = 8882
     private const val COMPLETED_NOTIFICATION_ID = 8883
+    private const val UPDATE_NOTIFICATION_ID = 8884
 
     fun ensureNotificationChannel(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -45,6 +48,16 @@ object DailyScheduleManager {
                 enableVibration(true)
             }
             manager.createNotificationChannel(channel)
+
+            val updateChannel = NotificationChannel(
+                UPDATE_NOTIFICATION_CHANNEL_ID,
+                context.getString(R.string.update_channel_name),
+                NotificationManager.IMPORTANCE_HIGH,
+            ).apply {
+                description = context.getString(R.string.update_channel_desc)
+                enableVibration(true)
+            }
+            manager.createNotificationChannel(updateChannel)
         }
     }
 
@@ -234,6 +247,56 @@ object DailyScheduleManager {
 
         runCatching {
             NotificationManagerCompat.from(context).notify(COMPLETED_NOTIFICATION_ID, notification)
+        }
+    }
+
+    fun postUpdateAvailableNotification(
+        context: Context,
+        releaseTag: String,
+        releaseNotes: String,
+        releaseHtmlUrl: String,
+    ): Boolean {
+        ensureNotificationChannel(context)
+        if (!hasNotificationPermission(context)) return false
+
+        val viewReleaseIntent = Intent(Intent.ACTION_VIEW, Uri.parse(releaseHtmlUrl)).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+        }
+        val viewReleasePending = PendingIntent.getActivity(
+            context,
+            105,
+            viewReleaseIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+
+        val firstCleanLine = releaseNotes
+            .lineSequence()
+            .map { it.trim().trimStart('#', '*', '-', ' ') }
+            .firstOrNull { it.isNotBlank() }
+            .orEmpty()
+        val body = if (firstCleanLine.isNotBlank()) {
+            "$firstCleanLine · Toca para abrir el APK en GitHub."
+        } else {
+            "Nueva versión lista en GitHub Releases. Toca para descargar y actualizar Tasa Bisu."
+        }
+
+        val notification = NotificationCompat.Builder(context, UPDATE_NOTIFICATION_CHANNEL_ID)
+            .setSmallIcon(R.mipmap.ic_launcher)
+            .setContentTitle("Actualización disponible · $releaseTag")
+            .setContentText(body)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_RECOMMENDATION)
+            .setAutoCancel(true)
+            .setContentIntent(viewReleasePending)
+            .addAction(0, "Abrir en GitHub", viewReleasePending)
+            .build()
+
+        return try {
+            NotificationManagerCompat.from(context).notify(UPDATE_NOTIFICATION_ID, notification)
+            true
+        } catch (_: SecurityException) {
+            false
         }
     }
 

@@ -1,9 +1,13 @@
 package com.example
 
+import com.example.data.network.GitHubUpdateChecker
 import com.example.data.network.RateScraperService
 import com.example.domain.RateCalculator
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class RateCalculatorTest {
@@ -65,5 +69,25 @@ class RateCalculatorTest {
         assertNotNull(usd)
         assertEquals(922.5637, usd!!, 0.0001)
         assertEquals("Miércoles, 25 Noviembre 2026", dateLabel)
+    }
+
+    @Test
+    fun parsesGitHubRepoSlugAndComparesReleaseTags() {
+        assertEquals("bisuteria888/tasa-bisu", GitHubUpdateChecker.normalizeRepoSlug("bisuteria888/tasa-bisu"))
+        assertEquals(
+            "bisuteria888/tasa-bisu",
+            GitHubUpdateChecker.normalizeRepoSlug("https://github.com/bisuteria888/tasa-bisu.git"),
+        )
+        assertEquals(
+            "bisuteria888/tasa-bisu",
+            GitHubUpdateChecker.normalizeRepoSlug("github.com/bisuteria888/tasa-bisu/releases"),
+        )
+        assertNull(GitHubUpdateChecker.normalizeRepoSlug("solo-un-segmento"))
+
+        assertTrue(GitHubUpdateChecker.isNewerVersion("v1.0.5", "1.0.0"))
+        assertTrue(GitHubUpdateChecker.isNewerVersion("v1.0.12", "1.0.9"))
+        assertFalse(GitHubUpdateChecker.isNewerVersion("v1.0.5", "1.0.5"))
+        assertFalse(GitHubUpdateChecker.isNewerVersion("v1.0.4", "1.0.5"))
+        assertFalse(GitHubUpdateChecker.isNewerVersion("v1.0.6", "1.0.5", acknowledgedTag = "v1.0.6"))
     }
 }
