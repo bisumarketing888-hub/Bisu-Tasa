@@ -63,7 +63,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.example.BuildConfig
 import com.example.data.network.GitHubReleaseInfo
@@ -111,7 +110,6 @@ fun ScheduleSettingsScreen(
     isCheckingUpdate: Boolean,
     updateStatusText: String?,
     onUpdateGitHubRepo: (String) -> Unit,
-    onUpdateGitHubToken: (String) -> Unit,
     onToggleAutoCheckUpdates: (Boolean) -> Unit,
     onCheckGitHubUpdatesNow: () -> Unit,
     onOpenGitHubUpdate: (String) -> Unit,
@@ -124,9 +122,6 @@ fun ScheduleSettingsScreen(
     }
     var githubRepoInput by remember(settings.githubRepoSlug) {
         mutableStateOf(settings.githubRepoSlug)
-    }
-    var githubTokenInput by remember(settings.githubToken) {
-        mutableStateOf(settings.githubToken)
     }
 
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
@@ -283,9 +278,9 @@ fun ScheduleSettingsScreen(
                             onUpdateTargetGroup(it)
                         },
                         label = { Text("Nombre exacto del grupo destino") },
-                        placeholder = { Text("Ej. Diferencial / Cotización Bisu") },
+                        placeholder = { Text(DispatchSettings.DEFAULT_TARGET_GROUP) },
                         supportingText = {
-                            Text("La app buscará este nombre exacto en WhatsApp Business y enviará ambos mensajes allí.")
+                            Text("Ya viene preconfigurado con COTIZACIÓN DE BISU 888📊📈 para todo el equipo.")
                         },
                         singleLine = true,
                         modifier = Modifier
@@ -553,29 +548,14 @@ fun ScheduleSettingsScreen(
                             onUpdateGitHubRepo(it)
                         },
                         label = { Text("Repositorio GitHub (usuario/repositorio o URL)") },
-                        placeholder = { Text("Ej. bisumarketing888-hub/Bisu-Tasa") },
+                        placeholder = { Text(DispatchSettings.DEFAULT_GITHUB_REPO) },
                         supportingText = {
-                            Text("Si tu repositorio es público deja el token vacío. Si es privado, pega un Personal Access Token abajo.")
+                            Text("Preconfigurado con bisumarketing888-hub/Bisu-Tasa para recibir actualizaciones automáticas.")
                         },
                         singleLine = true,
                         modifier = Modifier
                             .fillMaxWidth()
                             .testTag("github_repo_input"),
-                    )
-
-                    OutlinedTextField(
-                        value = githubTokenInput,
-                        onValueChange = {
-                            githubTokenInput = it
-                            onUpdateGitHubToken(it)
-                        },
-                        label = { Text("Token de GitHub (opcional, solo repo privado)") },
-                        placeholder = { Text("github_pat_... o ghp_...") },
-                        visualTransformation = PasswordVisualTransformation(),
-                        singleLine = true,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("github_token_input"),
                     )
 
                     Row(

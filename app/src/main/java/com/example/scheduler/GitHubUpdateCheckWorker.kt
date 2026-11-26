@@ -23,11 +23,13 @@ class GitHubUpdateCheckWorker(
         val settings = settingsStore.getSettingsSnapshot()
 
         if (!settings.autoCheckUpdates) return Result.success()
-        val repoSlug = settings.githubRepoSlug.ifBlank { BuildConfig.DEFAULT_GITHUB_REPO }
+        val repoSlug = settings.githubRepoSlug
+            .ifBlank { BuildConfig.DEFAULT_GITHUB_REPO }
+            .ifBlank { com.example.domain.DispatchSettings.DEFAULT_GITHUB_REPO }
         if (repoSlug.isBlank()) return Result.success()
 
         val checker = GitHubUpdateChecker()
-        val release = checker.fetchLatestRelease(repoSlug, settings.githubToken).getOrNull()
+        val release = checker.fetchLatestRelease(repoSlug).getOrNull()
             ?: return Result.success()
 
         val isNewer = GitHubUpdateChecker.isNewerVersion(

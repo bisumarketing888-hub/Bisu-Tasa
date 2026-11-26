@@ -25,94 +25,79 @@ class GitHubUpdateChecker {
         .followRedirects(true)
         .build()
 
-    suspend fun fetchLatestRelease(
-        repoInput: String,
-        githubToken: String = "",
-    ): Result<GitHubReleaseInfo> = withContext(Dispatchers.IO) {
-        val slug = normalizeRepoSlug(repoInput)
-            ?: return@withContext Result.failure(
-                IllegalArgumentException("Escribe el repositorio como usuario/repositorio (ej. miusuario/tasa-bisu)."),
-            )
+    suspend fun fetchLatestRelease(repoInput: String): Result<GitHubReleaseInfo> =
+        withContext(Dispatchers.IO) {
+            val slug = normalizeRepoSlug(repoInput)
+                ?: return@withContext Result.failure(
+                    IllegalArgumentException("Escribe el repositorio como usuario/repositorio (ej. bisumarketing888-hub/Bisu-Tasa)."),
+                )
 
-        val cleanToken = githubToken.trim()
-        val releaseUrl = "https://api.github.com/repos/$slug/releases/latest"
-        val releaseRequest = buildGitHubRequest(releaseUrl, cleanToken)
+            val releaseUrl = "https://api.github.com/repos/$slug/releases/latest"
+            val releaseRequest = buildGitHubRequest(releaseUrl)
 
-        try {
-            client.newCall(releaseRequest).execute().use { response ->
-                val body = response.body?.string().orEmpty()
-                if (response.code == 404) {
-                    val diagnosticMessage = diagnoseNotFound(slug, cleanToken)
-                    return@withContext Result.failure(IOException(diagnosticMessage))
-                }
-                if (response.code == 401 || response.code == 403) {
-                    return@withContext Result.failure(
-                        IOException("GitHub rechazó el acceso (HTTP ${response.code}). Verifica si tu token es válido o si se alcanzó el límite temporal."),
-                    )
-                }
-                if (!response.isSuccessful) {
-                    return@withContext Result.failure(
-                        IOException("GitHub respondió HTTP ${response.code}."),
-                    )
-                }
+            try {
+                client.newCall(releaseRequest).execute().use { response ->
+                    val body = response.body?.string().orEmpty()
+                    if (response.code == 404) {
+                        val diagnosticMessage = diagnoseNotFound(slug)
+                        return@withContext Result.failure(IOException(diagnosticMessage))
+                    }
+                    if (!response.isSuccessful) {
+                        return@withContext Result.failure(
+                            IOException("GitHub respondió HTTP ${response.code}."),
+                        )
+                    }
 
-                val json = JSONObject(body)
-                val tagName = json.optString("tag_name").trim()
-                val htmlUrl = json.optString("html_url").trim()
-                if (tagName.isBlank() || htmlUrl.isBlank()) {
-                    return@withContext Result.failure(
-                        IOException("El último Release en GitHub no contiene información válida."),
-                    )
-                }
+                    val json = JSONObject(body)
+                    val tagName = json.optString("tag_name").trim()
+                    val htmlUrl = json.optString("html_url").trim()
+                    if (tagName.isBlank() || htmlUrl.isBlank()) {
+                        return@withContext Result.failure(
+                            IOException("El último Release en GitHub no contiene información válida."),
+                        )
+                    }
 
-                val releaseName = json.optString("name").trim().ifBlank { tagName }
-                val releaseNotes = json.optString("body").trim()
-                val publishedAt = json.optString("published_at").trim()
+                    val releaseName = json.optString("name").trim().ifBlank { tagName }
+                    val releaseNotes = json.optString("body").trim()
+                    val publishedAt = json.optString("published_at").trim()
 
-                var apkAssetName = ""
-                val assets = json.optJSONArray("assets")
-                if (assets != null) {
-                    for (i in 0 until assets.length()) {
-                        val asset = assets.optJSONObject(i) ?: continue
-                        val assetName = asset.optString("name").trim()
-                        if (assetName.endsWith(".apk", ignoreCase = true)) {
-                            apkAssetName = assetName
-                            break
+                    var apkAssetName = ""
+                    val assets = json.optJSONArray("assets")
+                    if (assets != null) {
+                        for (i in 0 until assets.length()) {
+                            val asset = assets.optJSONObject(i) ?: continue
+                            val assetName = asset.optString("name").trim()
+                            if (assetName.endsWith(".apk", ignoreCase = true)) {
+                                apkAssetName = assetName
+                                break
+                            }
                         }
                     }
+
+                    Result.success(
+                        GitHubReleaseInfo(
+                            tagName = tagName,
+                            releaseName = releaseName,
+                            releaseNotes = releaseNotes,
+                            htmlUrl = htmlUrl,
+                            publishedAt = publishedAt,
+                            apkAssetName = apkAssetName,
+                        ),
+                    )
                 }
-
-                Result.success(
-                    GitHubReleaseInfo(
-                        tagName = tagName,
-                        releaseName = releaseName,
-                        releaseNotes = releaseNotes,
-                        htmlUrl = htmlUrl,
-                        publishedAt = publishedAt,
-                        apkAssetName = apkAssetName,
-                    ),
-                )
+            } catch (e: Exception) {
+                Result.failure(e)
             }
-        } catch (e: Exception) {
-            Result.failure(e)
         }
-    }
 
-    /**
-     * Distinguishes whether HTTP 404 means:
-     * 1) The repository IS visible, so simply no GitHub Release has been published yet (check Actions tab), or
-     * 2) The repository is Private (or misspelled) and requires making it Public or entering a GitHub Token.
-     */
-    private fun diagnoseNotFound(slug: String, cleanToken: String): String {
+    private fun diagnoseNotFound(slug: String): String {
         return try {
-            val repoReq = buildGitHubRequest("https://api.github.com/repos/$slug", cleanToken)
+            val repoReq = buildGitHubRequest("https://api.github.com/repos/$slug")
             client.newCall(repoReq).execute().use { repoResp ->
                 if (repoResp.isSuccessful) {
-                    "Repositorio $slug conectado ✓, pero aún no tiene ningún Release publicado. Entra a la pestaña Actions en GitHub para verificar que el workflow haya terminado en verde."
-                } else if (cleanToken.isBlank()) {
-                    "El repositorio $slug es privado o no existe. Hazlo público en GitHub (Settings → Change visibility) o pega un Token de GitHub abajo."
+                    "Repositorio $slug conectado ✓, pero aún no tiene ningún Release publicado en Actions."
                 } else {
-                    "No se pudo acceder a $slug con ese Token. Verifica que el token tenga permiso de lectura en Contents y que el nombre del repo sea exacto."
+                    "No se pudo leer $slug. Verifica que el repositorio esté en modo Público en GitHub."
                 }
             }
         } catch (_: Exception) {
@@ -120,28 +105,18 @@ class GitHubUpdateChecker {
         }
     }
 
-    private fun buildGitHubRequest(url: String, cleanToken: String): Request {
-        val builder = Request.Builder()
+    private fun buildGitHubRequest(url: String): Request {
+        return Request.Builder()
             .url(url)
             .header("Accept", "application/vnd.github+json")
             .header("User-Agent", "TasaBisu-Android")
             .header("Cache-Control", "no-cache")
-        if (cleanToken.isNotBlank()) {
-            builder.header("Authorization", "Bearer $cleanToken")
-        }
-        return builder.build()
+            .build()
     }
 
     companion object {
         private val VALID_SEGMENT_REGEX = Regex("^[A-Za-z0-9._-]+$")
 
-        /**
-         * Accepts formats such as:
-         * - "usuario/tasa-bisu"
-         * - "https://github.com/usuario/tasa-bisu"
-         * - "https://github.com/usuario/tasa-bisu.git"
-         * - "github.com/usuario/tasa-bisu/releases"
-         */
         fun normalizeRepoSlug(rawInput: String): String? {
             var cleaned = rawInput.trim()
             if (cleaned.isBlank()) return null

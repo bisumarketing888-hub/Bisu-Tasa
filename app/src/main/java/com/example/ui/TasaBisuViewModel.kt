@@ -215,7 +215,9 @@ class TasaBisuViewModel(application: Application) : AndroidViewModel(application
 
                 if (!initialUpdateCheckTriggered) {
                     initialUpdateCheckTriggered = true
-                    val repo = settings.githubRepoSlug.ifBlank { BuildConfig.DEFAULT_GITHUB_REPO }
+                    val repo = settings.githubRepoSlug
+                        .ifBlank { BuildConfig.DEFAULT_GITHUB_REPO }
+                        .ifBlank { DispatchSettings.DEFAULT_GITHUB_REPO }
                     GitHubUpdateCheckWorker.syncPeriodicSchedule(
                         context = appContext,
                         enabled = settings.autoCheckUpdates,
@@ -754,21 +756,19 @@ class TasaBisuViewModel(application: Application) : AndroidViewModel(application
             GitHubUpdateCheckWorker.syncPeriodicSchedule(
                 context = appContext,
                 enabled = _uiState.value.settings.autoCheckUpdates,
-                repoSlug = normalized.ifBlank { BuildConfig.DEFAULT_GITHUB_REPO },
+                repoSlug = normalized.ifBlank {
+                    BuildConfig.DEFAULT_GITHUB_REPO.ifBlank { DispatchSettings.DEFAULT_GITHUB_REPO }
+                },
             )
-        }
-    }
-
-    fun updateGitHubToken(token: String) {
-        viewModelScope.launch {
-            settingsStore.updateGitHubToken(token)
         }
     }
 
     fun updateAutoCheckUpdates(enabled: Boolean) {
         viewModelScope.launch {
             settingsStore.updateAutoCheckUpdates(enabled)
-            val repo = _uiState.value.settings.githubRepoSlug.ifBlank { BuildConfig.DEFAULT_GITHUB_REPO }
+            val repo = _uiState.value.settings.githubRepoSlug
+                .ifBlank { BuildConfig.DEFAULT_GITHUB_REPO }
+                .ifBlank { DispatchSettings.DEFAULT_GITHUB_REPO }
             GitHubUpdateCheckWorker.syncPeriodicSchedule(
                 context = appContext,
                 enabled = enabled,
@@ -787,11 +787,13 @@ class TasaBisuViewModel(application: Application) : AndroidViewModel(application
     fun checkForGitHubUpdates(manual: Boolean = true) {
         if (_uiState.value.isCheckingUpdate) return
         val settings = _uiState.value.settings
-        val rawRepo = settings.githubRepoSlug.ifBlank { BuildConfig.DEFAULT_GITHUB_REPO }
+        val rawRepo = settings.githubRepoSlug
+            .ifBlank { BuildConfig.DEFAULT_GITHUB_REPO }
+            .ifBlank { DispatchSettings.DEFAULT_GITHUB_REPO }
 
         if (rawRepo.isBlank()) {
             if (manual) {
-                showBanner("Escribe tu repositorio de GitHub (ej. usuario/tasa-bisu) para buscar actualizaciones.")
+                showBanner("Escribe tu repositorio de GitHub (ej. bisumarketing888-hub/Bisu-Tasa) para buscar actualizaciones.")
             }
             return
         }
@@ -810,7 +812,7 @@ class TasaBisuViewModel(application: Application) : AndroidViewModel(application
                 )
             }
 
-            val result = updateChecker.fetchLatestRelease(rawRepo, settings.githubToken)
+            val result = updateChecker.fetchLatestRelease(rawRepo)
             result.onSuccess { release ->
                 val isNewer = GitHubUpdateChecker.isNewerVersion(
                     latestTag = release.tagName,

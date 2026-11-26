@@ -258,7 +258,6 @@ private fun TasaBisuAppRoot(viewModel: TasaBisuViewModel) {
                         isCheckingUpdate = uiState.isCheckingUpdate,
                         updateStatusText = uiState.updateStatusText,
                         onUpdateGitHubRepo = { viewModel.updateGitHubRepoSlug(it) },
-                        onUpdateGitHubToken = { viewModel.updateGitHubToken(it) },
                         onToggleAutoCheckUpdates = { viewModel.updateAutoCheckUpdates(it) },
                         onCheckGitHubUpdatesNow = { viewModel.checkForGitHubUpdates(manual = true) },
                         onOpenGitHubUpdate = { viewModel.openAvailableUpdateInBrowser(it) },

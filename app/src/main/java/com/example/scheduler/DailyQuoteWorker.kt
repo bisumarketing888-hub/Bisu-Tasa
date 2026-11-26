@@ -152,11 +152,13 @@ class DailyQuoteWorker(
         }
 
         // Also check GitHub Releases for app updates in the background if configured
-        val repoSlug = settings.githubRepoSlug.ifBlank { BuildConfig.DEFAULT_GITHUB_REPO }
+        val repoSlug = settings.githubRepoSlug
+            .ifBlank { BuildConfig.DEFAULT_GITHUB_REPO }
+            .ifBlank { com.example.domain.DispatchSettings.DEFAULT_GITHUB_REPO }
         if (settings.autoCheckUpdates && repoSlug.isNotBlank()) {
             runCatching {
                 val release = GitHubUpdateChecker()
-                    .fetchLatestRelease(repoSlug, settings.githubToken)
+                    .fetchLatestRelease(repoSlug)
                     .getOrNull()
                 if (release != null && GitHubUpdateChecker.isNewerVersion(
                         latestTag = release.tagName,

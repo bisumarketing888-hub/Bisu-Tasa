@@ -40,7 +40,6 @@ class SettingsStore(private val context: Context) {
         val CUSTOM_TEMPLATE_URI = stringPreferencesKey("custom_template_uri")
         val DARK_THEME = booleanPreferencesKey("dark_theme_enabled")
         val GITHUB_REPO_SLUG = stringPreferencesKey("github_repo_slug")
-        val GITHUB_TOKEN = stringPreferencesKey("github_token")
         val AUTO_CHECK_UPDATES = booleanPreferencesKey("auto_check_updates")
         val ACKNOWLEDGED_RELEASE_TAG = stringPreferencesKey("acknowledged_release_tag")
         val LAST_NOTIFIED_RELEASE_TAG = stringPreferencesKey("last_notified_release_tag")
@@ -63,8 +62,18 @@ class SettingsStore(private val context: Context) {
         val preferred = PreferredWhatsAppApp.entries.firstOrNull { it.packageName == pkg }
             ?: PreferredWhatsAppApp.WHATSAPP_BUSINESS
 
+        val savedGroup = prefs[Keys.TARGET_GROUP]?.trim().orEmpty()
+        val effectiveGroup = if (savedGroup.isBlank() || savedGroup == "Grupo Diferencial Bisu") {
+            DispatchSettings.DEFAULT_TARGET_GROUP
+        } else {
+            savedGroup
+        }
+        val defaultRepo = BuildConfig.DEFAULT_GITHUB_REPO.ifBlank {
+            DispatchSettings.DEFAULT_GITHUB_REPO
+        }
+
         DispatchSettings(
-            targetGroupName = prefs[Keys.TARGET_GROUP] ?: "Grupo Diferencial Bisu",
+            targetGroupName = effectiveGroup,
             preferredApp = preferred,
             scheduleEnabled = prefs[Keys.SCHEDULE_ENABLED] ?: true,
             autoSendEnabled = prefs[Keys.AUTO_SEND_ENABLED] ?: true,
@@ -78,9 +87,7 @@ class SettingsStore(private val context: Context) {
             displayTimeLabel = prefs[Keys.DISPLAY_TIME_LABEL] ?: "9:00 am",
             customTemplateUri = prefs[Keys.CUSTOM_TEMPLATE_URI] ?: "",
             darkThemeEnabled = prefs[Keys.DARK_THEME] ?: true,
-            githubRepoSlug = prefs[Keys.GITHUB_REPO_SLUG]?.ifBlank { BuildConfig.DEFAULT_GITHUB_REPO }
-                ?: BuildConfig.DEFAULT_GITHUB_REPO,
-            githubToken = prefs[Keys.GITHUB_TOKEN] ?: "",
+            githubRepoSlug = prefs[Keys.GITHUB_REPO_SLUG]?.ifBlank { defaultRepo } ?: defaultRepo,
             autoCheckUpdates = prefs[Keys.AUTO_CHECK_UPDATES] ?: true,
             acknowledgedReleaseTag = prefs[Keys.ACKNOWLEDGED_RELEASE_TAG] ?: "",
         )
@@ -194,10 +201,6 @@ class SettingsStore(private val context: Context) {
 
     suspend fun updateGitHubRepoSlug(slug: String) {
         context.tasaBisuDataStore.edit { it[Keys.GITHUB_REPO_SLUG] = slug.trim() }
-    }
-
-    suspend fun updateGitHubToken(token: String) {
-        context.tasaBisuDataStore.edit { it[Keys.GITHUB_TOKEN] = token.trim() }
     }
 
     suspend fun updateAutoCheckUpdates(enabled: Boolean) {

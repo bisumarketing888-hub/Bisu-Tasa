@@ -39,7 +39,7 @@ data class DifferentialResult(
 )
 
 data class DispatchSettings(
-    val targetGroupName: String = "Grupo Diferencial Bisu",
+    val targetGroupName: String = DEFAULT_TARGET_GROUP,
     val preferredApp: PreferredWhatsAppApp = PreferredWhatsAppApp.WHATSAPP_BUSINESS,
     val scheduleEnabled: Boolean = true,
     val autoSendEnabled: Boolean = true,
@@ -53,11 +53,15 @@ data class DispatchSettings(
     val displayTimeLabel: String = "9:00 am",
     val customTemplateUri: String = "",
     val darkThemeEnabled: Boolean = true,
-    val githubRepoSlug: String = "",
-    val githubToken: String = "",
+    val githubRepoSlug: String = DEFAULT_GITHUB_REPO,
     val autoCheckUpdates: Boolean = true,
     val acknowledgedReleaseTag: String = "",
-)
+) {
+    companion object {
+        const val DEFAULT_TARGET_GROUP = "COTIZACIÓN DE BISU 888📊📈"
+        const val DEFAULT_GITHUB_REPO = "https://github.com/bisumarketing888-hub/Bisu-Tasa"
+    }
+}
 
 data class AutomationReadiness(
     val accessibilityEnabled: Boolean = false,
