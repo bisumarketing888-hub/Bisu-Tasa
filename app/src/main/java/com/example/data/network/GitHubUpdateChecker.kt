@@ -37,6 +37,7 @@ class GitHubUpdateChecker {
                 .url(url)
                 .header("Accept", "application/vnd.github+json")
                 .header("User-Agent", "TasaBisu-Android")
+                .header("Cache-Control", "no-cache")
                 .build()
 
             try {

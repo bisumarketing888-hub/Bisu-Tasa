@@ -87,6 +87,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.example.BuildConfig
 import com.example.R
 import com.example.data.network.GitHubReleaseInfo
 import com.example.domain.BinanceOffer
@@ -353,9 +354,9 @@ private fun TopBrandHeader(
             }
             Spacer(modifier = Modifier.height(2.dp))
             val updatedText = if (uiState.lastFetchedMillis > 0L) {
-                "Actualizado ${RateCalculator.formatHourMinute(uiState.lastFetchedMillis)} · ${uiState.quoteDateFormatted}"
+                "Actualizado ${RateCalculator.formatHourMinute(uiState.lastFetchedMillis)} · ${uiState.quoteDateFormatted} · v${BuildConfig.VERSION_NAME}"
             } else {
-                "Cotización diaria BCV y Binance P2P"
+                "Cotización diaria BCV y Binance P2P · v${BuildConfig.VERSION_NAME}"
             }
             Text(
                 text = updatedText,

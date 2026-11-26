@@ -73,9 +73,11 @@ jobs:
 
       - name: Compilar APK Debug firmada
         env:
-          APP_VERSION_CODE: ${{ github.run_number }}
-          APP_VERSION_NAME: 1.0.${{ github.run_number }}
-        run: gradle :app:assembleDebug --no-daemon
+          APP_VERSION_NAME: 1.1.${{ github.run_number }}
+        run: |
+          export APP_VERSION_CODE=$((100 + ${GITHUB_RUN_NUMBER:-1}))
+          echo "Compilando Tasa Bisu v$APP_VERSION_NAME (versionCode=$APP_VERSION_CODE)"
+          gradle :app:assembleDebug --no-daemon
 
       - name: Preparar archivo APK con número de versión
         run: |
@@ -85,29 +87,29 @@ jobs:
             echo "No se encontró el APK compilado en $APK_SOURCE"
             exit 1
           fi
-          cp "$APK_SOURCE" "release-output/tasa-bisu-v1.0.${{ github.run_number }}.apk"
+          cp "$APK_SOURCE" "release-output/tasa-bisu-v1.1.${{ github.run_number }}.apk"
 
       - name: Guardar APK como artefacto del workflow
         uses: actions/upload-artifact@v4
         with:
-          name: tasa-bisu-v1.0.${{ github.run_number }}
-          path: release-output/tasa-bisu-v1.0.${{ github.run_number }}.apk
+          name: tasa-bisu-v1.1.${{ github.run_number }}
+          path: release-output/tasa-bisu-v1.1.${{ github.run_number }}.apk
           retention-days: 30
 
       - name: Publicar GitHub Release con APK listo para actualizar
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.0.${{ github.run_number }}
-          name: Tasa Bisu v1.0.${{ github.run_number }}
+          tag_name: v1.1.${{ github.run_number }}
+          name: Tasa Bisu v1.1.${{ github.run_number }}
           make_latest: true
           body: |
-            Nueva compilación automática de **Tasa Bisu** (`v1.0.${{ github.run_number }}`).
+            Nueva compilación automática de **Tasa Bisu** (`v1.1.${{ github.run_number }}`).
 
             **Cambios incluidos:**
             ${{ github.event.head_commit.message || 'Actualización manual desde GitHub Actions' }}
 
             **Cómo actualizar en el teléfono:**
-            1. Descarga `tasa-bisu-v1.0.${{ github.run_number }}.apk` abajo en **Assets**.
+            1. Descarga `tasa-bisu-v1.1.${{ github.run_number }}.apk` abajo en **Assets**.
             2. Ábrelo desde **Archivos / Descargas** y toca **Actualizar** (no necesitas desinstalar la versión anterior).
           files: |
-            release-output/tasa-bisu-v1.0.${{ github.run_number }}.apk
+            release-output/tasa-bisu-v1.1.${{ github.run_number }}.apk
