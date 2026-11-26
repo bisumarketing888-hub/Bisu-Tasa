@@ -685,6 +685,16 @@ class TasaBisuViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
+    fun openAppDetailsSettings() {
+        runCatching {
+            val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                data = Uri.parse("package:${appContext.packageName}")
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            appContext.startActivity(intent)
+        }
+    }
+
     fun updateScheduleWindow(startHour: Int, startMinute: Int, endHour: Int, endMinute: Int) {
         viewModelScope.launch {
             settingsStore.updateScheduleWindow(startHour, startMinute, endHour, endMinute)
@@ -749,6 +759,12 @@ class TasaBisuViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
+    fun updateGitHubToken(token: String) {
+        viewModelScope.launch {
+            settingsStore.updateGitHubToken(token)
+        }
+    }
+
     fun updateAutoCheckUpdates(enabled: Boolean) {
         viewModelScope.launch {
             settingsStore.updateAutoCheckUpdates(enabled)
@@ -794,7 +810,7 @@ class TasaBisuViewModel(application: Application) : AndroidViewModel(application
                 )
             }
 
-            val result = updateChecker.fetchLatestRelease(rawRepo)
+            val result = updateChecker.fetchLatestRelease(rawRepo, settings.githubToken)
             result.onSuccess { release ->
                 val isNewer = GitHubUpdateChecker.isNewerVersion(
                     latestTag = release.tagName,

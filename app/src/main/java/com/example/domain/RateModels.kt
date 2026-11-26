@@ -54,6 +54,7 @@ data class DispatchSettings(
     val customTemplateUri: String = "",
     val darkThemeEnabled: Boolean = true,
     val githubRepoSlug: String = "",
+    val githubToken: String = "",
     val autoCheckUpdates: Boolean = true,
     val acknowledgedReleaseTag: String = "",
 )

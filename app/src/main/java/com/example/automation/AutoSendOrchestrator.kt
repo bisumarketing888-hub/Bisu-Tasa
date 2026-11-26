@@ -155,6 +155,8 @@ object AutoSendOrchestrator {
             }
         }
 
+        val pm = appCtx.getSystemService(Context.POWER_SERVICE) as PowerManager
+        val wasScreenOff = !pm.isInteractive
         acquireShortWakeLock(appCtx)
 
         resetPhaseFlags()
@@ -180,6 +182,19 @@ object AutoSendOrchestrator {
         mainHandler.removeCallbacks(timeoutRunnable)
         mainHandler.postDelayed(timeoutRunnable, JOB_TIMEOUT_MS)
 
+        if (wasScreenOff) {
+            // Give the display a moment to wake up from overnight sleep before launching WhatsApp
+            mainHandler.postDelayed({
+                if (currentJob == job) {
+                    val launched = launchStep1ImageIntent(appCtx, job)
+                    if (launched) {
+                        WhatsAppAutoSendService.instance?.startActivePollingLoop()
+                    }
+                }
+            }, 850L)
+            return true
+        }
+
         val launched = launchStep1ImageIntent(appCtx, job)
         if (launched) {
             WhatsAppAutoSendService.instance?.startActivePollingLoop()
@@ -198,7 +213,9 @@ object AutoSendOrchestrator {
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
             }
-            context.startActivity(intent)
+            // Prefer AccessibilityService context: officially exempt from Android Background Activity Launch (BAL) blocks
+            val launcherCtx: Context = WhatsAppAutoSendService.instance ?: context
+            launcherCtx.startActivity(intent)
             true
         } catch (e: Exception) {
             failJob("No se pudo iniciar WhatsApp Business: ${e.localizedMessage ?: "error"}")
@@ -276,7 +293,8 @@ object AutoSendOrchestrator {
                 putExtra(Intent.EXTRA_TEXT, job.differentialMessage)
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
             }
-            context.startActivity(intent)
+            val launcherCtx: Context = WhatsAppAutoSendService.instance ?: context
+            launcherCtx.startActivity(intent)
             WhatsAppAutoSendService.instance?.startActivePollingLoop()
         } catch (e: Exception) {
             failJob("Error al enviar diferencial: ${e.localizedMessage ?: "error"}")

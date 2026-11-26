@@ -1,6 +1,7 @@
 package com.example
 
 import android.content.Intent
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -83,6 +84,10 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+            setShowWhenLocked(true)
+            setTurnScreenOn(true)
+        }
         enableEdgeToEdge()
         handleIntentQuickAction(intent)
 
@@ -246,12 +251,14 @@ private fun TasaBisuAppRoot(viewModel: TasaBisuViewModel) {
                         onOpenAccessibilitySettings = { viewModel.openAccessibilitySettings() },
                         onOpenExactAlarmSettings = { viewModel.openExactAlarmSettings() },
                         onRequestBatteryUnrestricted = { viewModel.requestIgnoreBatteryOptimizations() },
+                        onOpenAppDetailsSettings = { viewModel.openAppDetailsSettings() },
                         onTestAutoSendNow = { viewModel.startFullAutoSendNow() },
                         onTestNotification = { viewModel.sendTestMorningNotification() },
                         availableUpdate = uiState.availableUpdate,
                         isCheckingUpdate = uiState.isCheckingUpdate,
                         updateStatusText = uiState.updateStatusText,
                         onUpdateGitHubRepo = { viewModel.updateGitHubRepoSlug(it) },
+                        onUpdateGitHubToken = { viewModel.updateGitHubToken(it) },
                         onToggleAutoCheckUpdates = { viewModel.updateAutoCheckUpdates(it) },
                         onCheckGitHubUpdatesNow = { viewModel.checkForGitHubUpdates(manual = true) },
                         onOpenGitHubUpdate = { viewModel.openAvailableUpdateInBrowser(it) },

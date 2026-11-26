@@ -63,6 +63,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.example.BuildConfig
 import com.example.data.network.GitHubReleaseInfo
@@ -103,12 +104,14 @@ fun ScheduleSettingsScreen(
     onOpenAccessibilitySettings: () -> Unit,
     onOpenExactAlarmSettings: () -> Unit,
     onRequestBatteryUnrestricted: () -> Unit,
+    onOpenAppDetailsSettings: () -> Unit,
     onTestAutoSendNow: () -> Unit,
     onTestNotification: () -> Unit,
     availableUpdate: GitHubReleaseInfo?,
     isCheckingUpdate: Boolean,
     updateStatusText: String?,
     onUpdateGitHubRepo: (String) -> Unit,
+    onUpdateGitHubToken: (String) -> Unit,
     onToggleAutoCheckUpdates: (Boolean) -> Unit,
     onCheckGitHubUpdatesNow: () -> Unit,
     onOpenGitHubUpdate: (String) -> Unit,
@@ -121,6 +124,9 @@ fun ScheduleSettingsScreen(
     }
     var githubRepoInput by remember(settings.githubRepoSlug) {
         mutableStateOf(settings.githubRepoSlug)
+    }
+    var githubTokenInput by remember(settings.githubToken) {
+        mutableStateOf(settings.githubToken)
     }
 
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
@@ -223,16 +229,21 @@ fun ScheduleSettingsScreen(
                                 modifier = Modifier.size(18.dp),
                             )
                             Text(
-                                text = "Importante para envío 100% desatendido: en tu teléfono dedicado, deja el bloqueo de pantalla en 'Ninguno' (sin PIN/patrón) para que Android permita despertar la pantalla y abrir WhatsApp Business automáticamente a las ${
-                                    DailyScheduleManager.formatClockTime(
-                                        settings.exactSendHour,
-                                        settings.exactSendMinute,
-                                    )
-                                }.",
+                                text = "No necesitas dejar la pantalla encendida ni la app abierta toda la noche. Solo deja el bloqueo en 'Ninguno' (sin PIN/patrón) y activa en Xiaomi HyperOS: Inicio automático en segundo plano + Otros permisos → Mostrar ventanas emergentes en segundo plano.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurface,
                             )
                         }
+                    }
+
+                    OutlinedButton(
+                        onClick = onOpenAppDetailsSettings,
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("open_hyperos_app_details_button"),
+                    ) {
+                        Text("Abrir permisos HyperOS (Inicio automático y ventanas)")
                     }
 
                     Button(
@@ -542,14 +553,29 @@ fun ScheduleSettingsScreen(
                             onUpdateGitHubRepo(it)
                         },
                         label = { Text("Repositorio GitHub (usuario/repositorio o URL)") },
-                        placeholder = { Text("Ej. miusuario/tasa-bisu") },
+                        placeholder = { Text("Ej. bisumarketing888-hub/Bisu-Tasa") },
                         supportingText = {
-                            Text("Al compilar desde GitHub Actions se completa solo. El repositorio debe ser público para leer Releases sin token.")
+                            Text("Si tu repositorio es público deja el token vacío. Si es privado, pega un Personal Access Token abajo.")
                         },
                         singleLine = true,
                         modifier = Modifier
                             .fillMaxWidth()
                             .testTag("github_repo_input"),
+                    )
+
+                    OutlinedTextField(
+                        value = githubTokenInput,
+                        onValueChange = {
+                            githubTokenInput = it
+                            onUpdateGitHubToken(it)
+                        },
+                        label = { Text("Token de GitHub (opcional, solo repo privado)") },
+                        placeholder = { Text("github_pat_... o ghp_...") },
+                        visualTransformation = PasswordVisualTransformation(),
+                        singleLine = true,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("github_token_input"),
                     )
 
                     Row(

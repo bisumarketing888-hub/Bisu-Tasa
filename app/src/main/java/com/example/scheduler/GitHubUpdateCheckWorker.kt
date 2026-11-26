@@ -27,7 +27,8 @@ class GitHubUpdateCheckWorker(
         if (repoSlug.isBlank()) return Result.success()
 
         val checker = GitHubUpdateChecker()
-        val release = checker.fetchLatestRelease(repoSlug).getOrNull() ?: return Result.success()
+        val release = checker.fetchLatestRelease(repoSlug, settings.githubToken).getOrNull()
+            ?: return Result.success()
 
         val isNewer = GitHubUpdateChecker.isNewerVersion(
             latestTag = release.tagName,

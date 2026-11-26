@@ -40,6 +40,7 @@ class SettingsStore(private val context: Context) {
         val CUSTOM_TEMPLATE_URI = stringPreferencesKey("custom_template_uri")
         val DARK_THEME = booleanPreferencesKey("dark_theme_enabled")
         val GITHUB_REPO_SLUG = stringPreferencesKey("github_repo_slug")
+        val GITHUB_TOKEN = stringPreferencesKey("github_token")
         val AUTO_CHECK_UPDATES = booleanPreferencesKey("auto_check_updates")
         val ACKNOWLEDGED_RELEASE_TAG = stringPreferencesKey("acknowledged_release_tag")
         val LAST_NOTIFIED_RELEASE_TAG = stringPreferencesKey("last_notified_release_tag")
@@ -79,6 +80,7 @@ class SettingsStore(private val context: Context) {
             darkThemeEnabled = prefs[Keys.DARK_THEME] ?: true,
             githubRepoSlug = prefs[Keys.GITHUB_REPO_SLUG]?.ifBlank { BuildConfig.DEFAULT_GITHUB_REPO }
                 ?: BuildConfig.DEFAULT_GITHUB_REPO,
+            githubToken = prefs[Keys.GITHUB_TOKEN] ?: "",
             autoCheckUpdates = prefs[Keys.AUTO_CHECK_UPDATES] ?: true,
             acknowledgedReleaseTag = prefs[Keys.ACKNOWLEDGED_RELEASE_TAG] ?: "",
         )
@@ -192,6 +194,10 @@ class SettingsStore(private val context: Context) {
 
     suspend fun updateGitHubRepoSlug(slug: String) {
         context.tasaBisuDataStore.edit { it[Keys.GITHUB_REPO_SLUG] = slug.trim() }
+    }
+
+    suspend fun updateGitHubToken(token: String) {
+        context.tasaBisuDataStore.edit { it[Keys.GITHUB_TOKEN] = token.trim() }
     }
 
     suspend fun updateAutoCheckUpdates(enabled: Boolean) {

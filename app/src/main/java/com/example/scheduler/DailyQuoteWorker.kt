@@ -155,7 +155,9 @@ class DailyQuoteWorker(
         val repoSlug = settings.githubRepoSlug.ifBlank { BuildConfig.DEFAULT_GITHUB_REPO }
         if (settings.autoCheckUpdates && repoSlug.isNotBlank()) {
             runCatching {
-                val release = GitHubUpdateChecker().fetchLatestRelease(repoSlug).getOrNull()
+                val release = GitHubUpdateChecker()
+                    .fetchLatestRelease(repoSlug, settings.githubToken)
+                    .getOrNull()
                 if (release != null && GitHubUpdateChecker.isNewerVersion(
                         latestTag = release.tagName,
                         installedVersion = BuildConfig.VERSION_NAME,

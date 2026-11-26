@@ -16,8 +16,8 @@ android {
     applicationId = "com.aistudio.tasabisu.k8m3px"
     minSdk = 24
     targetSdk = 36
-    versionCode = System.getenv("APP_VERSION_CODE")?.toIntOrNull() ?: 2
-    versionName = System.getenv("APP_VERSION_NAME")?.takeIf { it.isNotBlank() } ?: "1.1.0"
+    versionCode = System.getenv("APP_VERSION_CODE")?.toIntOrNull() ?: 3
+    versionName = System.getenv("APP_VERSION_NAME")?.takeIf { it.isNotBlank() } ?: "1.2.0"
     val ciGithubRepo = (System.getenv("GITHUB_REPOSITORY") ?: "").replace("\"", "")
     buildConfigField("String", "DEFAULT_GITHUB_REPO", "\"$ciGithubRepo\"")
 

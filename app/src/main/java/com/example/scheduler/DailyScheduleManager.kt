@@ -105,9 +105,18 @@ object DailyScheduleManager {
         val pendingIntent = buildAlarmPendingIntent(context)
 
         if (canScheduleExactAlarms(context)) {
-            alarmManager.setExactAndAllowWhileIdle(
-                AlarmManager.RTC_WAKEUP,
-                targetStart.timeInMillis,
+            val showAppIntent = Intent(context, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            }
+            val showAppPending = PendingIntent.getActivity(
+                context,
+                ALARM_REQUEST_CODE + 10,
+                showAppIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
+            // setAlarmClock breaks through Android Doze and Xiaomi HyperOS overnight deep sleep
+            alarmManager.setAlarmClock(
+                AlarmManager.AlarmClockInfo(targetStart.timeInMillis, showAppPending),
                 pendingIntent,
             )
         } else {
