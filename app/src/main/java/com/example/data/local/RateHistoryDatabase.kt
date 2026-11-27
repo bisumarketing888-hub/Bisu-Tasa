@@ -33,6 +33,9 @@ interface RateHistoryDao {
     @Query("SELECT * FROM rate_history WHERE dateKey = :dateKey LIMIT 1")
     suspend fun getByDateKey(dateKey: String): RateHistoryEntity?
 
+    @Query("SELECT * FROM rate_history WHERE dateKey < :todayKey AND bcvRate > 0 ORDER BY dateKey DESC LIMIT 1")
+    suspend fun getLatestBeforeDate(todayKey: String): RateHistoryEntity?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(entry: RateHistoryEntity)
 

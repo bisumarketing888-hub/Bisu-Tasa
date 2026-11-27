@@ -21,6 +21,16 @@ data class BcvFetchResult(
     val valueDateLabel: String,
     val sourceName: String,
     val isFallbackSource: Boolean,
+    val valueDateKey: String? = null,
+)
+
+data class ResolvedBcvRate(
+    val effectiveRate: Double,
+    val effectiveSourceName: String,
+    val effectiveDateLabel: String,
+    val effectiveValueDateKey: String,
+    val isHoldingPreviousBankingRate: Boolean,
+    val shouldUpdateLastActiveBcv: Boolean,
 )
 
 data class BinanceFetchResult(
@@ -92,4 +102,7 @@ data class CachedQuoteData(
     val fetchedAtMillis: Long = 0L,
     val imageSentDateKey: String = "",
     val diffSentDateKey: String = "",
+    val lastActiveBcvRate: Double = 0.0,
+    val lastActiveBcvValueDateKey: String = "",
+    val lastActiveBcvDateLabel: String = "",
 )

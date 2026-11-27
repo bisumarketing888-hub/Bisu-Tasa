@@ -54,6 +54,9 @@ class SettingsStore(private val context: Context) {
         val CACHED_FETCHED_AT = longPreferencesKey("cached_fetched_at")
         val IMAGE_SENT_DATE_KEY = stringPreferencesKey("image_sent_date_key")
         val DIFF_SENT_DATE_KEY = stringPreferencesKey("diff_sent_date_key")
+        val LAST_ACTIVE_BCV_RATE = doublePreferencesKey("last_active_bcv_rate")
+        val LAST_ACTIVE_BCV_DATE_KEY = stringPreferencesKey("last_active_bcv_date_key")
+        val LAST_ACTIVE_BCV_DATE_LABEL = stringPreferencesKey("last_active_bcv_date_label")
     }
 
     val settingsFlow: Flow<DispatchSettings> = context.tasaBisuDataStore.data.map { prefs ->
@@ -104,6 +107,9 @@ class SettingsStore(private val context: Context) {
             fetchedAtMillis = prefs[Keys.CACHED_FETCHED_AT] ?: 0L,
             imageSentDateKey = prefs[Keys.IMAGE_SENT_DATE_KEY] ?: "",
             diffSentDateKey = prefs[Keys.DIFF_SENT_DATE_KEY] ?: "",
+            lastActiveBcvRate = prefs[Keys.LAST_ACTIVE_BCV_RATE] ?: 0.0,
+            lastActiveBcvValueDateKey = prefs[Keys.LAST_ACTIVE_BCV_DATE_KEY] ?: "",
+            lastActiveBcvDateLabel = prefs[Keys.LAST_ACTIVE_BCV_DATE_LABEL] ?: "",
         )
     }
 
@@ -188,6 +194,19 @@ class SettingsStore(private val context: Context) {
             it[Keys.CACHED_BINANCE_MERCHANT] = binanceMerchant
             it[Keys.CACHED_QUOTE_DATE] = quoteDateFormatted
             it[Keys.CACHED_FETCHED_AT] = fetchedAtMillis
+        }
+    }
+
+    suspend fun saveLastActiveBcvRate(
+        bcvRate: Double,
+        valueDateKey: String,
+        valueDateLabel: String,
+    ) {
+        if (bcvRate <= 0.0) return
+        context.tasaBisuDataStore.edit {
+            it[Keys.LAST_ACTIVE_BCV_RATE] = bcvRate
+            it[Keys.LAST_ACTIVE_BCV_DATE_KEY] = valueDateKey.trim()
+            it[Keys.LAST_ACTIVE_BCV_DATE_LABEL] = valueDateLabel.trim()
         }
     }
 

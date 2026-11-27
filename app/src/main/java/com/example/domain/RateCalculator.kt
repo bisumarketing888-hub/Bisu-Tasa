@@ -4,7 +4,9 @@ import java.math.BigDecimal
 import java.math.RoundingMode
 import java.text.DecimalFormat
 import java.text.DecimalFormatSymbols
+import java.text.Normalizer
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 import kotlin.math.floor
@@ -186,5 +188,152 @@ object RateCalculator {
             else -> cleaned
         }
         return normalized.toDoubleOrNull()?.takeIf { it.isFinite() && it > 0.0 }
+    }
+
+    private val SPANISH_MONTHS = mapOf(
+        "enero" to 1,
+        "febrero" to 2,
+        "marzo" to 3,
+        "abril" to 4,
+        "mayo" to 5,
+        "junio" to 6,
+        "julio" to 7,
+        "agosto" to 8,
+        "septiembre" to 9,
+        "setiembre" to 9,
+        "octubre" to 10,
+        "noviembre" to 11,
+        "diciembre" to 12,
+    )
+
+    /**
+     * Parses a BCV "Fecha Valor" string into a lexicographically comparable "yyyy-MM-dd" key.
+     * Supports:
+     * - "Viernes, 27 Noviembre 2026"
+     * - "Martes, 01 Diciembre 2026"
+     * - "2026-11-27" or "2026-11-27T00:00:00-04:00"
+     * - "27/11/2026"
+     */
+    fun parseBcvValueDateKey(rawLabel: String): String? {
+        val trimmed = rawLabel.trim()
+        if (trimmed.isEmpty()) return null
+
+        // 1. ISO yyyy-MM-dd
+        Regex("""(\d{4})-(\d{2})-(\d{2})""").find(trimmed)?.let { m ->
+            val y = m.groupValues[1].toIntOrNull() ?: return@let
+            val mo = m.groupValues[2].toIntOrNull() ?: return@let
+            val d = m.groupValues[3].toIntOrNull() ?: return@let
+            if (mo in 1..12 && d in 1..31) {
+                return String.format(Locale.US, "%04d-%02d-%02d", y, mo, d)
+            }
+        }
+
+        // 2. dd/MM/yyyy
+        Regex("""(\d{1,2})/(\d{1,2})/(\d{4})""").find(trimmed)?.let { m ->
+            val d = m.groupValues[1].toIntOrNull() ?: return@let
+            val mo = m.groupValues[2].toIntOrNull() ?: return@let
+            val y = m.groupValues[3].toIntOrNull() ?: return@let
+            if (mo in 1..12 && d in 1..31) {
+                return String.format(Locale.US, "%04d-%02d-%02d", y, mo, d)
+            }
+        }
+
+        // 3. Spanish long format: "Viernes, 27 Noviembre 2026" or "27 de noviembre de 2026"
+        val normalized = Normalizer.normalize(trimmed.lowercase(Locale("es", "VE")), Normalizer.Form.NFD)
+            .replace(Regex("\\p{InCombiningDiacriticalMarks}+"), "")
+        val spanishRegex = Regex("""(\d{1,2})\s+(?:de\s+)?([a-z]+)\s+(?:de\s+)?(\d{4})""")
+        spanishRegex.find(normalized)?.let { m ->
+            val d = m.groupValues[1].toIntOrNull() ?: return@let
+            val monthName = m.groupValues[2]
+            val y = m.groupValues[3].toIntOrNull() ?: return@let
+            val mo = SPANISH_MONTHS[monthName] ?: return@let
+            if (d in 1..31) {
+                return String.format(Locale.US, "%04d-%02d-%02d", y, mo, d)
+            }
+        }
+
+        return null
+    }
+
+    /**
+     * Resolves which BCV rate applies TODAY following Venezuelan banking rules:
+     * - Mon–Fri (normal banking day): adopts the BCV rate whose Fecha Valor is <= today.
+     * - Saturday (Sábado): BCV does not update on Saturdays (and already publishes Monday/Tuesday
+     *   future Fecha Valor on Friday afternoon). Keeps Friday's last active BCV rate while today's
+     *   date and live Binance differential still update.
+     * - Banking Monday / holiday (Lunes bancario or any day where BCV's published Fecha Valor is
+     *   strictly AFTER today, e.g., BCV shows Tuesday while today is Monday): keeps Friday's last
+     *   active BCV rate until Tuesday arrives (when Fecha Valor <= today).
+     */
+    fun resolveEffectiveBcvRate(
+        fetched: BcvFetchResult,
+        todayKey: String,
+        dayOfWeek: Int,
+        previousActiveRate: Double,
+        previousActiveDateKey: String = "",
+        previousActiveDateLabel: String = "",
+    ): ResolvedBcvRate {
+        val fetchedDateKey = fetched.valueDateKey?.takeIf { it.isNotBlank() }
+            ?: parseBcvValueDateKey(fetched.valueDateLabel)
+            ?: ""
+
+        val isWeekend = dayOfWeek == Calendar.SATURDAY || dayOfWeek == Calendar.SUNDAY
+        val isFutureValueDate = fetchedDateKey.isNotBlank() && fetchedDateKey > todayKey
+        val hasValidPrevious = previousActiveRate > 0.0 &&
+            (previousActiveDateKey.isBlank() || previousActiveDateKey <= todayKey)
+
+        // Case 1: Saturday/Sunday or Lunes Bancario (BCV Fecha Valor is in the future, e.g. Martes)
+        if ((isWeekend || isFutureValueDate) && hasValidPrevious) {
+            // If it's Saturday and BCV website STILL shows Friday's rate (<= today), prefer the live Friday value
+            if (isWeekend && !isFutureValueDate && fetchedDateKey.isNotBlank() && !fetched.isFallbackSource) {
+                return ResolvedBcvRate(
+                    effectiveRate = fetched.rateRaw,
+                    effectiveSourceName = "Tasa vigente del viernes (${fetched.valueDateLabel})",
+                    effectiveDateLabel = fetched.valueDateLabel,
+                    effectiveValueDateKey = fetchedDateKey,
+                    isHoldingPreviousBankingRate = true,
+                    shouldUpdateLastActiveBcv = true,
+                )
+            }
+
+            val reasonSource = when {
+                dayOfWeek == Calendar.SATURDAY -> "Sábado · Tasa vigente del viernes"
+                dayOfWeek == Calendar.SUNDAY -> "Domingo · Tasa vigente del viernes"
+                dayOfWeek == Calendar.MONDAY && isFutureValueDate ->
+                    "Lunes bancario · Tasa del viernes (BCV prox.: ${fetched.valueDateLabel})"
+                else -> "Feriado bancario · Tasa vigente (BCV prox.: ${fetched.valueDateLabel})"
+            }
+            return ResolvedBcvRate(
+                effectiveRate = previousActiveRate,
+                effectiveSourceName = reasonSource,
+                effectiveDateLabel = previousActiveDateLabel.ifBlank { fetched.valueDateLabel },
+                effectiveValueDateKey = previousActiveDateKey,
+                isHoldingPreviousBankingRate = true,
+                shouldUpdateLastActiveBcv = false,
+            )
+        }
+
+        // Case 2: No previous rate cached yet on a future-dated holiday/Saturday -> use fetched rate with clear hint
+        if (isFutureValueDate && !hasValidPrevious) {
+            return ResolvedBcvRate(
+                effectiveRate = fetched.rateRaw,
+                effectiveSourceName = "BCV prox. (${fetched.valueDateLabel}) · Sin tasa previa",
+                effectiveDateLabel = fetched.valueDateLabel,
+                effectiveValueDateKey = fetchedDateKey,
+                isHoldingPreviousBankingRate = false,
+                shouldUpdateLastActiveBcv = false,
+            )
+        }
+
+        // Case 3: Normal active banking day (Fecha Valor <= today) -> adopt live rate and store as active banking rate
+        val activeKey = fetchedDateKey.ifBlank { todayKey }
+        return ResolvedBcvRate(
+            effectiveRate = fetched.rateRaw,
+            effectiveSourceName = fetched.sourceName,
+            effectiveDateLabel = fetched.valueDateLabel,
+            effectiveValueDateKey = activeKey,
+            isHoldingPreviousBankingRate = false,
+            shouldUpdateLastActiveBcv = !isWeekend && activeKey <= todayKey,
+        )
     }
 }

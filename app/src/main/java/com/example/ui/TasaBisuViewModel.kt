@@ -37,6 +37,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.util.Calendar
 
 data class TasaBisuUiState(
     val isLoading: Boolean = false,
@@ -259,9 +260,51 @@ class TasaBisuViewModel(application: Application) : AndroidViewModel(application
             val binanceData = binanceRes.getOrNull()
             val nowMillis = System.currentTimeMillis()
             val todayFormatted = RateCalculator.formatTodayDate(nowMillis)
+            val todayKey = RateCalculator.formatDateKey(nowMillis)
+            val dayOfWeek = Calendar.getInstance().get(Calendar.DAY_OF_WEEK)
+
+            val resolvedBcv = if (bcvData != null) {
+                val cachedSnapshot = settingsStore.getCachedQuoteSnapshot()
+                val priorHistory = historyDao.getLatestBeforeDate(todayKey)
+                val previousActiveRate = when {
+                    cachedSnapshot.lastActiveBcvRate > 0.0 -> cachedSnapshot.lastActiveBcvRate
+                    priorHistory != null && priorHistory.bcvRate > 0.0 -> priorHistory.bcvRate
+                    cachedSnapshot.bcvRate > 0.0 -> cachedSnapshot.bcvRate
+                    else -> 0.0
+                }
+                val previousActiveDateKey = when {
+                    cachedSnapshot.lastActiveBcvRate > 0.0 -> cachedSnapshot.lastActiveBcvValueDateKey
+                    priorHistory != null -> priorHistory.dateKey
+                    else -> ""
+                }
+                val previousActiveDateLabel = when {
+                    cachedSnapshot.lastActiveBcvRate > 0.0 -> cachedSnapshot.lastActiveBcvDateLabel
+                    priorHistory != null -> priorHistory.dateFormatted
+                    else -> cachedSnapshot.bcvDateLabel
+                }
+
+                val resolved = RateCalculator.resolveEffectiveBcvRate(
+                    fetched = bcvData,
+                    todayKey = todayKey,
+                    dayOfWeek = dayOfWeek,
+                    previousActiveRate = previousActiveRate,
+                    previousActiveDateKey = previousActiveDateKey,
+                    previousActiveDateLabel = previousActiveDateLabel,
+                )
+                if (resolved.shouldUpdateLastActiveBcv) {
+                    settingsStore.saveLastActiveBcvRate(
+                        bcvRate = resolved.effectiveRate,
+                        valueDateKey = resolved.effectiveValueDateKey,
+                        valueDateLabel = resolved.effectiveDateLabel,
+                    )
+                }
+                resolved
+            } else {
+                null
+            }
 
             _uiState.update { current ->
-                val newBcv = bcvData?.rateRaw ?: current.bcvRateRaw
+                val newBcv = resolvedBcv?.effectiveRate ?: current.bcvRateRaw
                 val newOffers = binanceData?.offers ?: current.binanceOffers
                 val firstOffer = newOffers.firstOrNull()
                 val clearManualBinance = binanceData != null && firstOffer != null
@@ -269,8 +312,8 @@ class TasaBisuViewModel(application: Application) : AndroidViewModel(application
                 current.copy(
                     isLoading = false,
                     bcvRateRaw = newBcv,
-                    bcvSourceName = bcvData?.sourceName ?: current.bcvSourceName,
-                    bcvValueDateLabel = bcvData?.valueDateLabel ?: current.bcvValueDateLabel,
+                    bcvSourceName = resolvedBcv?.effectiveSourceName ?: current.bcvSourceName,
+                    bcvValueDateLabel = resolvedBcv?.effectiveDateLabel ?: current.bcvValueDateLabel,
                     bcvError = bcvRes.exceptionOrNull()?.localizedMessage,
                     binanceOffers = newOffers,
                     selectedOfferIndex = 0,
@@ -279,7 +322,7 @@ class TasaBisuViewModel(application: Application) : AndroidViewModel(application
                         ?: current.binanceMerchantDisplay,
                     binanceError = binanceRes.exceptionOrNull()?.localizedMessage,
                     quoteDateFormatted = todayFormatted,
-                    lastFetchedMillis = if (bcvData != null || binanceData != null) {
+                    lastFetchedMillis = if (resolvedBcv != null || binanceData != null) {
                         nowMillis
                     } else {
                         current.lastFetchedMillis
@@ -294,7 +337,15 @@ class TasaBisuViewModel(application: Application) : AndroidViewModel(application
             if (updated.hasValidRates) {
                 persistSnapshot(updated)
                 if (!isInitial) {
-                    showBanner("Tasas actualizadas · BCV Bs. ${RateCalculator.formatVenezuelanNumber(RateCalculator.roundToTwoDecimals(updated.bcvRateRaw))} · Dif. ${updated.differential.percent}%")
+                    val bcvText = RateCalculator.formatVenezuelanNumber(
+                        RateCalculator.roundToTwoDecimals(updated.bcvRateRaw),
+                    )
+                    val holdNote = if (resolvedBcv?.isHoldingPreviousBankingRate == true) {
+                        " (tasa del viernes vigente)"
+                    } else {
+                        ""
+                    }
+                    showBanner("Tasas actualizadas$holdNote · BCV Bs. $bcvText · Dif. ${updated.differential.percent}%")
                 }
             } else if (!isInitial) {
                 showBanner("No se pudieron descargar todas las tasas. Puedes editarlas manualmente.")
@@ -353,6 +404,13 @@ class TasaBisuViewModel(application: Application) : AndroidViewModel(application
         }
 
         viewModelScope.launch {
+            if (parsedBcv != null) {
+                settingsStore.saveLastActiveBcvRate(
+                    bcvRate = parsedBcv,
+                    valueDateKey = RateCalculator.formatDateKey(),
+                    valueDateLabel = cleanDate,
+                )
+            }
             regenerateCard()
             val state = _uiState.value
             if (state.hasValidRates) {

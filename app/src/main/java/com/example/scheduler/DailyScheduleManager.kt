@@ -101,6 +101,11 @@ object DailyScheduleManager {
             targetStart.add(Calendar.DAY_OF_YEAR, 1)
         }
 
+        // Dispatch runs Monday through Saturday only (skip Sunday automatically)
+        if (targetStart.get(Calendar.DAY_OF_WEEK) == Calendar.SUNDAY) {
+            targetStart.add(Calendar.DAY_OF_YEAR, 1)
+        }
+
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         val pendingIntent = buildAlarmPendingIntent(context)
 

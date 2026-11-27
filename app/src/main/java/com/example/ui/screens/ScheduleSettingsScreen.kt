@@ -324,11 +324,11 @@ fun ScheduleSettingsScreen(
                 }
             }
 
-            // 3. Daily Exact Schedule (8:50 – 8:59 AM)
+            // 3. Daily Exact Schedule (Monday – Saturday, before 9:00 AM)
             item {
                 SettingsSectionCard(
-                    title = "Horario Diario (Antes de las 9:00 AM)",
-                    subtitle = "Ejecuta la descarga de BCV + Binance y envía ambos mensajes todos los días.",
+                    title = "Horario Diario (Lunes a Sábado)",
+                    subtitle = "No envía domingos. Sábados y lunes bancarios mantiene la tasa BCV del viernes actualizando fecha y diferencial.",
                     icon = Icons.Rounded.Alarm,
                 ) {
                     Row(

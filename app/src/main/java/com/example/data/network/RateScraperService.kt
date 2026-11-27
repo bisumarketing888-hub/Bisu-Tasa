@@ -65,12 +65,15 @@ class RateScraperService(
                     ?: throw IOException("No se encontró el bloque USD en bcv.org.ve")
                 val valueDate = extractValueDateFromBcvHtml(html)
                     ?: RateCalculator.formatTodayDate()
+                val valueDateKey = extractValueDateKeyFromBcvHtml(html)
+                    ?: RateCalculator.parseBcvValueDateKey(valueDate)
 
                 BcvFetchResult(
                     rateRaw = parsedRate,
                     valueDateLabel = valueDate,
                     sourceName = "bcv.org.ve (Oficial)",
                     isFallbackSource = false,
+                    valueDateKey = valueDateKey,
                 )
             }
         }
@@ -103,6 +106,7 @@ class RateScraperService(
                     valueDateLabel = updated,
                     sourceName = "Espejo BCV Oficial",
                     isFallbackSource = true,
+                    valueDateKey = RateCalculator.parseBcvValueDateKey(updated),
                 )
             }
         }
@@ -260,6 +264,17 @@ class RateScraperService(
             options = setOf(RegexOption.IGNORE_CASE),
         )
         return dateRegex.find(html)?.groupValues?.getOrNull(1)?.trim()?.takeIf { it.isNotEmpty() }
+    }
+
+    internal fun extractValueDateKeyFromBcvHtml(html: String): String? {
+        val contentAttrRegex = Regex(
+            pattern = """class=["'][^"']*date-display-single[^"']*["'][^>]*content=["'](\d{4}-\d{2}-\d{2})""",
+            options = setOf(RegexOption.IGNORE_CASE),
+        )
+        contentAttrRegex.find(html)?.groupValues?.getOrNull(1)?.let { return it }
+
+        val label = extractValueDateFromBcvHtml(html) ?: return null
+        return RateCalculator.parseBcvValueDateKey(label)
     }
 
     companion object {

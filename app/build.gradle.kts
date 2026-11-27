@@ -16,8 +16,8 @@ android {
     applicationId = "com.aistudio.tasabisu.k8m3px"
     minSdk = 24
     targetSdk = 36
-    versionCode = System.getenv("APP_VERSION_CODE")?.toIntOrNull() ?: 4
-    versionName = System.getenv("APP_VERSION_NAME")?.takeIf { it.isNotBlank() } ?: "1.3.0"
+    versionCode = System.getenv("APP_VERSION_CODE")?.toIntOrNull() ?: 5
+    versionName = System.getenv("APP_VERSION_NAME")?.takeIf { it.isNotBlank() } ?: "1.4.0"
     val ciGithubRepo = (System.getenv("GITHUB_REPOSITORY") ?: "bisumarketing888-hub/Bisu-Tasa").replace("\"", "")
     buildConfigField("String", "DEFAULT_GITHUB_REPO", "\"$ciGithubRepo\"")
 

@@ -20,6 +20,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
+import java.util.Calendar
 
 class DailyQuoteWorker(
     appContext: Context,
@@ -42,9 +43,17 @@ class DailyQuoteWorker(
     }
 
     override suspend fun doWork(): Result = coroutineScope {
+        val nowCal = Calendar.getInstance()
+        val dayOfWeek = nowCal.get(Calendar.DAY_OF_WEEK)
+        // Only send Monday through Saturday; skip Sunday completely
+        if (dayOfWeek == Calendar.SUNDAY) {
+            return@coroutineScope Result.success()
+        }
+
         val scraper = RateScraperService()
         val settingsStore = SettingsStore(applicationContext)
         val settings = settingsStore.getSettingsSnapshot()
+        val cachedSnapshot = settingsStore.getCachedQuoteSnapshot()
 
         val bcvDeferred = async { scraper.fetchBcvRate() }
         val binanceDeferred = async { scraper.fetchBinanceBanescoSellOffers() }
@@ -57,18 +66,56 @@ class DailyQuoteWorker(
         }
 
         val firstOffer = binanceResult.offers.first()
-        val todayFormatted = RateCalculator.formatTodayDate()
-        val todayKey = RateCalculator.formatDateKey()
         val nowMillis = System.currentTimeMillis()
-        val diff = RateCalculator.calculateDifferential(
-            binancePrice = firstOffer.price,
-            bcvRawRate = bcvResult.rateRaw,
+        val todayFormatted = RateCalculator.formatTodayDate(nowMillis)
+        val todayKey = RateCalculator.formatDateKey(nowMillis)
+
+        val dao = AppDatabase.getInstance(applicationContext).rateHistoryDao()
+        val priorHistory = dao.getLatestBeforeDate(todayKey)
+        val previousActiveRate = when {
+            cachedSnapshot.lastActiveBcvRate > 0.0 -> cachedSnapshot.lastActiveBcvRate
+            priorHistory != null && priorHistory.bcvRate > 0.0 -> priorHistory.bcvRate
+            cachedSnapshot.bcvRate > 0.0 -> cachedSnapshot.bcvRate
+            else -> 0.0
+        }
+        val previousActiveDateKey = when {
+            cachedSnapshot.lastActiveBcvRate > 0.0 -> cachedSnapshot.lastActiveBcvValueDateKey
+            priorHistory != null -> priorHistory.dateKey
+            else -> ""
+        }
+        val previousActiveDateLabel = when {
+            cachedSnapshot.lastActiveBcvRate > 0.0 -> cachedSnapshot.lastActiveBcvDateLabel
+            priorHistory != null -> priorHistory.dateFormatted
+            else -> cachedSnapshot.bcvDateLabel
+        }
+
+        val resolvedBcv = RateCalculator.resolveEffectiveBcvRate(
+            fetched = bcvResult,
+            todayKey = todayKey,
+            dayOfWeek = dayOfWeek,
+            previousActiveRate = previousActiveRate,
+            previousActiveDateKey = previousActiveDateKey,
+            previousActiveDateLabel = previousActiveDateLabel,
         )
 
-        // Generate and cache today's ready-to-share PNG card
+        if (resolvedBcv.shouldUpdateLastActiveBcv) {
+            settingsStore.saveLastActiveBcvRate(
+                bcvRate = resolvedBcv.effectiveRate,
+                valueDateKey = resolvedBcv.effectiveValueDateKey,
+                valueDateLabel = resolvedBcv.effectiveDateLabel,
+            )
+        }
+
+        val effectiveBcvRate = resolvedBcv.effectiveRate
+        val diff = RateCalculator.calculateDifferential(
+            binancePrice = firstOffer.price,
+            bcvRawRate = effectiveBcvRate,
+        )
+
+        // Generate and cache today's ready-to-share PNG card (always with today's date + effective BCV rate)
         val bitmap = QuoteCardGenerator.generateQuoteBitmap(
             context = applicationContext,
-            bcvRate = bcvResult.rateRaw,
+            bcvRate = effectiveBcvRate,
             dateFormatted = todayFormatted,
             customTemplateUri = settings.customTemplateUri,
         )
@@ -77,22 +124,21 @@ class DailyQuoteWorker(
 
         // Save snapshot in DataStore & Room history
         settingsStore.saveFetchedSnapshot(
-            bcvRate = bcvResult.rateRaw,
-            bcvSource = bcvResult.sourceName,
-            bcvDateLabel = bcvResult.valueDateLabel,
+            bcvRate = effectiveBcvRate,
+            bcvSource = resolvedBcv.effectiveSourceName,
+            bcvDateLabel = resolvedBcv.effectiveDateLabel,
             binanceRate = firstOffer.price,
             binanceMerchant = firstOffer.advertiserName,
             quoteDateFormatted = todayFormatted,
             fetchedAtMillis = nowMillis,
         )
 
-        val dao = AppDatabase.getInstance(applicationContext).rateHistoryDao()
         val existing = dao.getByDateKey(todayKey)
         dao.upsert(
             RateHistoryEntity(
                 dateKey = todayKey,
                 dateFormatted = todayFormatted,
-                bcvRate = RateCalculator.roundToTwoDecimals(bcvResult.rateRaw),
+                bcvRate = RateCalculator.roundToTwoDecimals(effectiveBcvRate),
                 binanceRate = firstOffer.price,
                 binanceMerchant = firstOffer.advertiserName,
                 differentialPercent = diff.percent,
@@ -106,14 +152,14 @@ class DailyQuoteWorker(
             RateCalculator.buildCombinedMessageCaption(
                 dateFormatted = todayFormatted,
                 timeLabel = settings.displayTimeLabel,
-                bcvRate = bcvResult.rateRaw,
+                bcvRate = effectiveBcvRate,
                 differentialPercent = diff.percent,
             )
         } else {
             RateCalculator.buildImageCaption(
                 dateFormatted = todayFormatted,
                 timeLabel = settings.displayTimeLabel,
-                bcvRate = bcvResult.rateRaw,
+                bcvRate = effectiveBcvRate,
             )
         }
         val diffMessage = RateCalculator.buildDifferentialMessage(diff.percent)
@@ -133,7 +179,7 @@ class DailyQuoteWorker(
                     imageCaption = caption,
                     differentialMessage = diffMessage,
                     singleMessageMode = settings.singleMessageMode,
-                    bcvRate = bcvResult.rateRaw,
+                    bcvRate = effectiveBcvRate,
                     differentialPercent = diff.percent,
                 )
             }
@@ -145,7 +191,7 @@ class DailyQuoteWorker(
         if (!startedAutoSend) {
             DailyScheduleManager.postReadyNotification(
                 context = applicationContext,
-                bcvRate = bcvResult.rateRaw,
+                bcvRate = effectiveBcvRate,
                 differentialPercent = diff.percent,
                 targetGroupName = settings.targetGroupName,
             )
